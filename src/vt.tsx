@@ -67,7 +67,7 @@ interface vt_opts {
    * wheel event(only works on native events).
    */
   onScroll?: ({ left, top, isEnd, }:
-    { top: number; left: number; isEnd: boolean }) => void;
+                  { top: number; left: number; isEnd: boolean }) => void;
 
   initTop?: number;
 
@@ -102,7 +102,7 @@ interface VT_CONTEXT extends vt_opts {
   components: TableComponents;    // implementation layer.
   vt_state: e_VT_STATE;
   possible_hight_per_tr: number;
-  
+
   /* 0: needn't to recalculate, > 0: to add, < 0 to subtract */
   re_computed: number;
   row_height: number[];
@@ -243,7 +243,7 @@ const TableImpl = React.forwardRef<any>(function TableImpl(props, ref) {
 });
 /** AntD.TableComponent.body.wrapper */
 function WrapperImpl(props: any): JSX.Element {
-  return <tbody {...props} />; 
+  return <tbody {...props} />;
 }
 /** AntD.TableComponent.body.row */
 const RowImpl = React.forwardRef<any>(function RowImpl(props, ref) {
@@ -253,7 +253,7 @@ const RowImpl = React.forwardRef<any>(function RowImpl(props, ref) {
 
 /**
  * O(n)
- * returns offset: [head, tail, top] 
+ * returns offset: [head, tail, top]
  */
 function scroll_with_offset(ctx: VT_CONTEXT, top: number, scroll_y: VT_CONTEXT['scroll']['y']): [number, number, number] {
 
@@ -262,7 +262,6 @@ function scroll_with_offset(ctx: VT_CONTEXT, top: number, scroll_y: VT_CONTEXT['
     row_count,
     overscanRowCount,
   } = ctx;
-  let overscan = overscanRowCount;
 
   if (typeof scroll_y === "number") {
     ctx._raw_y = scroll_y as number;
@@ -300,14 +299,20 @@ function scroll_with_offset(ctx: VT_CONTEXT, top: number, scroll_y: VT_CONTEXT['
   for (; i < row_count && _top < top; ++i) {
     _top += row_height[i];
   }
-  while (i > 0 && overscan--) {
-    _top -= row_height[--i];
-  }
+
+  // start j from the visible area
   j = i;
   for (; j < row_count && torender_h < ctx._y; ++j) {
     torender_h += row_height[j];
   }
-  j += overscanRowCount * 2;
+
+  // keep offset row on top and bottom
+  let overscan = overscanRowCount;
+  while (i > 0 && overscan--) {
+    _top -= row_height[--i];
+  }
+  j += overscanRowCount;
+
   if (j > row_count) j = row_count;
   // returns [head, tail, top].
   return [0 | i, 0 | j, 0 | _top];
@@ -316,7 +321,7 @@ function scroll_with_offset(ctx: VT_CONTEXT, top: number, scroll_y: VT_CONTEXT['
 
 // set the variables for offset top/head/tail.
 function set_offset(
-  ctx: VT_CONTEXT, top: number, head: number, tail: number): void
+    ctx: VT_CONTEXT, top: number, head: number, tail: number): void
 {
   ctx._offset_top = 0 | top;
   ctx._offset_head = 0 | head;
@@ -325,7 +330,7 @@ function set_offset(
 
 
 function set_scroll(ctx: VT_CONTEXT,
-  top: number, left: number, evt: number, end: boolean): void
+                    top: number, left: number, evt: number, end: boolean): void
 {
   ctx.top = top;
   ctx.left = left;
@@ -339,8 +344,8 @@ function update_wrap_style(ctx: VT_CONTEXT, h: number): void {
   ctx.WH = h;
   const s = ctx.wrap_inst.current.style;
   s.height = h ?
-    (s.maxHeight = h + 'px', s.maxHeight) :
-    (s.maxHeight = 'unset', s.maxHeight);
+      (s.maxHeight = h + 'px', s.maxHeight) :
+      (s.maxHeight = 'unset', s.maxHeight);
 }
 
 
@@ -498,9 +503,9 @@ function VTable(props: VTableProps, ref: React.Ref<vt_opts['ref']['current']>) {
 
     // checks every tr's height, which will take some time...
     const offset = scroll_with_offset(
-                     ctx,
-                     ctx.f_final_top === TOP_CONTINUE ? ctx.final_top : etop,
-                     ctx.scroll.y);
+        ctx,
+        ctx.f_final_top === TOP_CONTINUE ? ctx.final_top : etop,
+        ctx.scroll.y);
 
     const head = offset[0];
     const tail = offset[1];
@@ -570,6 +575,14 @@ function VTable(props: VTableProps, ref: React.Ref<vt_opts['ref']['current']>) {
     set_scroll(ctx, etop, eleft, flag, end);
     force[1](++ctx.update_count);
   }, []);
+
+  useEffect(() => {
+    // on scroll size change rerender
+    scroll_hook({
+      target: { scrollTop: ctx.top, scrollLeft: ctx.left },
+      flag: SCROLLEVT_BY_HOOK,
+    });
+  }, [ctx.scroll.y])
 
 
   // expose to the parent components you are using.
@@ -811,7 +824,19 @@ function VTRow(props: VRowProps) {
 
 
   useEffect(() => {
-    const h = inst.current.offsetHeight;
+    const rowElm = inst.current;
+
+    // for nested(expanded) elements don't calculate height and add on cache as its already accommodated on parent row
+    if (!rowElm.matches(".ant-table-row-level-0")) return;
+
+    let h = rowElm.offsetHeight;
+    let sibling = rowElm.nextSibling as HTMLTableRowElement;
+    // include heights of all nested rows, in parent rows
+    while (sibling && !sibling.matches(".ant-table-row-level-0")) {
+      h += sibling.offsetHeight;
+      sibling = sibling.nextSibling as HTMLTableRowElement;
+    }
+
     const curr_h = ctx.row_height[index];
     const last_h = ctx.row_height[last_index.current];
 
@@ -835,7 +860,7 @@ function _set_components(ctx: VT_CONTEXT, components: TableComponents): void {
   ctx.components.body = { ...ctx.components.body, ...body };
   if (body && body.cell) {
     ctx._vtcomponents.body.cell = body.cell;
-  } 
+  }
   if (header) {
     ctx.components.header = header;
     ctx._vtcomponents.header = header;
